@@ -24,7 +24,10 @@ twitter_username: NikolayKarpow
 github_username:  nikolay-karpow
 
 # disqus
-site.disqus.shortname: nikolay-karpow-github-io
+disqus:
+  shortname: nikolay-karpow-github-io
+
+my_var: my var value
 
 # Build settings
 markdown: kramdown
