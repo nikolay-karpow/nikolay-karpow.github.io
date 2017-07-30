@@ -4,15 +4,6 @@ title: About
 permalink: /about/
 ---
 
-This is the base Jekyll theme. You can find out more info about customizing your Jekyll theme, as well as basic Jekyll usage documentation at [jekyllrb.com](https://jekyllrb.com/)
+I'm Nikolay Karpov, I'm a software developer. I value fulfilling work and do my best to produce the best software I can. I'm trying to write clean code, which wouldn't cause suffering of a maintainer. I look for a deeper meaning of my job, not just a payroll and a comfortable workplace.
 
-You can find the source code for Minima at GitHub:
-[jekyll][jekyll-organization] /
-[minima](https://github.com/jekyll/minima)
-
-You can find the source code for Jekyll at GitHub:
-[jekyll][jekyll-organization] /
-[jekyll](https://github.com/jekyll/jekyll)
-
-
-[jekyll-organization]: https://github.com/jekyll
+I work mostly in Java, I used to use C/C++ in the past.
