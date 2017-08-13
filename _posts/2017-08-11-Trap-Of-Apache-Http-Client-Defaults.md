@@ -49,7 +49,7 @@ public void multipleThreads() throws Exception {
     CloseableHttpClient httpclient = HttpClients.createDefault();
     HttpGet httpGet = new HttpGet("http://localhost:9099/tests/test");
 
-    int threadCount = 5;
+    int threadCount = 30;
     ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
 
     for (int i = 0; i < threadCount; i++) {
@@ -70,13 +70,106 @@ public void multipleThreads() throws Exception {
     executorService.awaitTermination(1, TimeUnit.MINUTES);
 }
 {% endhighlight %}
-Now things get a little bit trickier. I don't know about you, but I'd expect this to print numbers from 1 to 5, but in fact it prints this:
+Now things get a little bit trickier. I don't know about you, but I'd expect this to print numbers from 1 to 30, but in fact it prints this:
 {% highlight java %}
 1
 2
 2
 1
 1
+...
 {% endhighlight %}
 
-The reason is that HttpClient doesn't create a new connection for each request, but uses a connection pool instead. And by default it creates only 2 connections per route (route includes host and port). As we call the same route, all 5 threads go via just 2 connections. That was quite a surprise for me and my colleague. 
+The reason is that HttpClient doesn't create a new connection for each request, but uses a connection pool instead. And by default it creates only 2 connections per route (route includes host and port). As we call the same route, all 5 threads go via just 2 connections. That was quite a surprise for me.
+Let's fix it. We should use another way to create HttpClient, which allows to pass an instance of PoolingHttpClientConnectionManager:
+{% highlight java %}
+@Test
+public void multipleThreads_maxPerRoute() throws Exception {
+    PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+    connectionManager.setDefaultMaxPerRoute(30);
+    CloseableHttpClient httpclient = HttpClients.custom()
+            .setConnectionManager(connectionManager)
+            .build();
+
+    HttpGet httpGet = new HttpGet("http://localhost:9099/tests/test");
+
+    int threadCount = 30;
+    ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+    for (int i = 0; i < threadCount; i++) {
+        executorService.execute(() -> {
+            try (CloseableHttpResponse httpResponse = httpclient.execute(httpGet)) {
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                httpResponse.getEntity().writeTo(outputStream);
+
+                System.out.println(new String(outputStream.toByteArray()));
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    executorService.shutdown();
+    executorService.awaitTermination(1, TimeUnit.MINUTES);
+}
+{% endhighlight %}
+The important part is
+{% highlight java %}
+connectionManager.setDefaultMaxPerRoute(30);
+{% endhighlight %}
+So, now it should work, right? Unfortunately, we're not finished yet. This code produces numbers from 1 to 20, not to 30. Why? Well, there is one more parameter - max total connection count. Unfortunately, nothing warns us, that our maxPerRoute is less, than maxTotal. The final fix:
+{% highlight java %}
+@Test
+public void multipleThreads_maxPerRouteMaxTotal() throws Exception {
+    PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+    connectionManager.setDefaultMaxPerRoute(30);
+    connectionManager.setMaxTotal(30);
+    CloseableHttpClient httpclient = HttpClients.custom()
+            .setConnectionManager(connectionManager)
+            .build();
+
+    HttpGet httpGet = new HttpGet("http://localhost:9099/tests/test");
+
+    int threadCount = 30;
+    ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+    for (int i = 0; i < threadCount; i++) {
+        executorService.execute(() -> {
+            try (CloseableHttpResponse httpResponse = httpclient.execute(httpGet)) {
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                httpResponse.getEntity().writeTo(outputStream);
+
+                System.out.println(new String(outputStream.toByteArray()));
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    executorService.shutdown();
+    executorService.awaitTermination(1, TimeUnit.MINUTES);
+}
+{% endhighlight %}
+Now it works as expected at last, producing numbers from 1 to 30.
+
+### Connection request timeout
+By default, if there is no free connection in the pool, connection manager blocks until such a connection appears. If you want to make sure, it doesn't block indefinitely, you can set connection request timeout like this:
+{% highlight java %}
+PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+connectionManager.setDefaultMaxPerRoute(30);
+connectionManager.setMaxTotal(30);
+
+RequestConfig requestConfig = RequestConfig.custom()
+        .setConnectionRequestTimeout(5000)
+        .build();
+
+CloseableHttpClient httpclient = HttpClients.custom()
+        .setConnectionManager(connectionManager)
+        .setDefaultRequestConfig(requestConfig)
+        .build();
+{% endhighlight %}
+
+### Conclusion
+Default configuration of apache HttpClient is not suitable for multithread usage. When you use it to work with the same service from different threads, make sure you set up the connection pool appropriately. Also, don't forget to close responses, otherwise connections never go back to the pool. I hope, this post can save you some debugging time.
