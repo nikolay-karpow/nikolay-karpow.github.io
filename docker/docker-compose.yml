@@ -1,0 +1,6 @@
+jekyll-container:
+    image: jekyll
+    ports:
+        - "4000:4000"
+    volumes:
+        - /home/nick/Development/nikolay-karpow.github.io:/usr/src/app   
